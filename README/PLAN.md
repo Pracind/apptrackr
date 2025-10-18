@@ -10,9 +10,9 @@
 
 ## Days 1–2: Data Models & Database  
 **Day 1**  
-- [ ] Implement User and Application models in backend/models.py  
-- [ ] Set up backend/db.py for DB engine and table creation  
-- [ ] Create database initialization function (create_db)  
+- [.] Implement User and Application models in backend/models.py  
+- [.] Set up backend/db.py for DB engine and table creation  
+- [.] Create database initialization function (create_db)  
 
 **Day 2**  
 - [ ] Write script to initialize SQLite database  
