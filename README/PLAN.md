@@ -15,14 +15,14 @@
 - [.] Create database initialization function (create_db)  
 
 **Day 2**  
-- [ ] Write script to initialize SQLite database  
-- [ ] Create seed/demo data generator  
-- [ ] Write unit tests for model creation (pytest)  
+- [.] Write script to initialize SQLite database  
+- [.] Create seed/demo data generator  
+- [.] Write unit tests for model creation (pytest)  
 
 ## Days 3–5: Auth & API (FastAPI)  
 **Day 3**  
-- [ ] Implement POST /signup with password hashing  
-- [ ] Implement POST /login returning JWT token  
+- [.] Implement POST /signup with password hashing  
+- [.] Implement POST /login returning JWT token  
 
 **Day 4**  
 - [ ] Add token dependency to get current user  
