@@ -1,21 +1,53 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
 from backend.db import engine, create_db_and_tables
 from backend.models import User, Application
 from passlib.context import CryptContext
 from pydantic import BaseModel
 import jwt
+from typing import Optional
 from datetime import datetime, timedelta
 
 SECRET_KEY = "superdupersecret"
+ALGORITHM = "HS256"
 
-
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Call this once at startup
 create_db_and_tables()
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        email = payload.get("email")
+        if user_id is None or email is None:
+            raise credentials_exception
+        # Optionally query the DB for real user object here!
+        return {"id": user_id, "email": email, "name": payload.get("name")}
+    except jwt.PyJWTError:
+        raise credentials_exception
+    
+
+class CreateAppRequest(BaseModel):
+    company_name: str
+    role_title: str
+    city: str
+    country: str
+    salary: Optional[str] = None
+    applied_date: datetime
+    followup_date: Optional[datetime] = None
+    status: str = "pending"
+    followup_method: Optional[str] = None
+    notes: Optional[str] = None
 
 class SignupRequest(BaseModel):
     email: str
@@ -69,6 +101,45 @@ def login(request: LoginRequest):
         }
         token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
         return {"token": token, "user": {"id": user.id, "email": user.email}}
+    
+
+@app.get("/me")
+def read_me(current_user: dict = Depends(get_current_user)):
+    return {"user": current_user}
+
+
+@app.get("/apps")
+def get_apps(current_user: dict = Depends(get_current_user)):
+    with Session(engine) as session:
+        apps = session.exec(
+            select(Application).where(Application.user_id == current_user["id"])
+        ).all()
+        return apps
+
+@app.post("/apps")
+def create_app(
+    app_in: CreateAppRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    with Session(engine) as session:
+        new_app = Application(
+            user_id=current_user["id"],
+            company_name=app_in.company_name,
+            role_title=app_in.role_title,
+            city=app_in.city,
+            country=app_in.country,
+            salary=app_in.salary,
+            applied_date=app_in.applied_date,
+            followup_date=app_in.followup_date,
+            status=app_in.status,
+            followup_method=app_in.followup_method,
+            notes=app_in.notes,
+        )
+        session.add(new_app)
+        session.commit()
+        session.refresh(new_app)
+        return new_app
+
     
 
 

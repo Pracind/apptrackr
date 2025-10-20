@@ -25,8 +25,8 @@
 - [.] Implement POST /login returning JWT token  
 
 **Day 4**  
-- [ ] Add token dependency to get current user  
-- [ ] Implement GET /apps (filter by user) and POST /apps (create)  
+- [.] Add token dependency to get current user  
+- [.] Implement GET /apps (filter by user) and POST /apps (create)  
 
 **Day 5**  
 - [ ] Implement PUT /apps/{id} and DELETE /apps/{id}  
