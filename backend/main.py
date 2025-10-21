@@ -49,6 +49,18 @@ class CreateAppRequest(BaseModel):
     followup_method: Optional[str] = None
     notes: Optional[str] = None
 
+class UpdateAppRequest(BaseModel):
+    company_name: Optional[str] = None
+    role_title: Optional[str] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    salary: Optional[str] = None
+    applied_date: Optional[datetime] = None
+    followup_date: Optional[datetime] = None
+    status: Optional[str] = None
+    followup_method: Optional[str] = None
+    notes: Optional[str] = None
+
 class SignupRequest(BaseModel):
     email: str
     password: str
@@ -139,6 +151,31 @@ def create_app(
         session.commit()
         session.refresh(new_app)
         return new_app
+
+@app.put("/apps/{id}")
+def update_app(id: int, app_in: UpdateAppRequest, current_user: dict = Depends(get_current_user)):
+    with Session(engine) as session:
+        db_app = session.get(Application, id)
+        if not db_app or db_app.user_id != current_user["id"]:
+            raise HTTPException(status_code=404, detail="Application not found")
+        app_data = app_in.dict(exclude_unset=True)
+        for key, value in app_data.items():
+            setattr(db_app, key, value)
+        db_app.updated_at = datetime.utcnow()
+        session.add(db_app)
+        session.commit()
+        session.refresh(db_app)
+        return db_app
+    
+@app.delete("/apps/{id}")
+def delete_app(id: int, current_user: dict = Depends(get_current_user)):
+    with Session(engine) as session:
+        db_app = session.get(Application, id)
+        if not db_app or db_app.user_id != current_user["id"]:
+            raise HTTPException(status_code=404, detail="Application not found")
+        session.delete(db_app)
+        session.commit()
+        return {"detail": "Application deleted"}
 
     
 

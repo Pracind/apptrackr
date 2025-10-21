@@ -29,8 +29,8 @@
 - [.] Implement GET /apps (filter by user) and POST /apps (create)  
 
 **Day 5**  
-- [ ] Implement PUT /apps/{id} and DELETE /apps/{id}  
-- [ ] Write unit tests for API endpoints  
+- [.] Implement PUT /apps/{id} and DELETE /apps/{id}  
+- [.] Write unit tests for API endpoints  
 
 ## Days 6–8: Frontend Core (Streamlit)  
 **Day 6**  
