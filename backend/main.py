@@ -112,7 +112,7 @@ def login(request: LoginRequest):
             "name": user.name,
         }
         token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
-        return {"token": token, "user": {"id": user.id, "email": user.email}}
+        return {"token": token, "user": {"id": user.id, "email": user.email, "name": user.name}}
     
 
 @app.get("/me")
