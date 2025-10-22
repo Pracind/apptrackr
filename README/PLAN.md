@@ -34,8 +34,8 @@
 
 ## Days 6–8: Frontend Core (Streamlit)  
 **Day 6**  
-- [ ] Scaffold Streamlit app (frontend/streamlit_app.py)  
-- [ ] Implement login/signup UI with backend integration  
+- [.] Scaffold Streamlit app (frontend/streamlit_app.py)  
+- [.] Implement login/signup UI with backend integration  
 
 **Day 7**  
 - [ ] Build Applications List view (fetch GET /apps, show table)  
