@@ -1,5 +1,7 @@
 import streamlit as st
 import requests
+import pandas as pd
+
 
 API_URL = "http://127.0.0.1:8000"
 FORCE_NAV_KEY = "force_dashboard"
@@ -39,6 +41,15 @@ def show_signup():
         else:
             st.error("Signup failed. Try a different email.")
 
+def fetch_apps(token):
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.get(f"{API_URL}/apps", headers=headers)
+    if resp.status_code == 200:
+        return resp.json()
+    else:
+        st.error("Failed to fetch applications.")
+        return []
+
 # --- Authentication gating ---
 if "token" not in st.session_state:
     auth_mode = st.sidebar.radio("Account", ["Login", "Signup"])
@@ -75,7 +86,52 @@ st.write("Track and manage your job applications with ease.")
 if option == "Dashboard":
     st.header("Your Applications")
     st.info("List and filter your job applications here.")
-    # TODO: Add app listing logic
+    apps = fetch_apps(st.session_state.token)
+    if apps:
+        df = pd.DataFrame(apps)
+        cols = [
+            "company_name", "role_title", "salary",          
+            "city", "country", "applied_date",    
+            "followup_date", "status", "followup_method", 
+            "notes"           
+        ]
+
+        display_cols = [c for c in cols if c in df.columns]
+        st.dataframe(df[display_cols])
+
+        statuses = ["All", "pending", "followed-up", "not-responded", "rejected", "accepted"]
+        tabs = st.tabs(statuses)
+        for idx, status in enumerate(statuses):
+            with tabs[idx]:
+                if status == "All":
+                    filtered_df = df
+                else:
+                    filtered_df = df[df["status"] == status]
+
+                st.write(f"Showing {len(filtered_df)} applications with status: {status if status != 'All' else 'any'}")
+
+                # Status chip formatter
+                def chip(s):
+                    color = {
+                        "pending": "#FFE066",
+                        "followed-up": "#B8F2E6",
+                        "not-responded": "#FFB4A2",
+                        "rejected": "#E63946",
+                        "accepted": "#4CAF50"
+                    }.get(s, "#d3d3d3")
+                    return f'<span style="background-color:{color};color:#222;padding:2px 8px;border-radius:8px;">{s.title()}</span>'
+
+                # Apply chips
+                chip_df = filtered_df.copy()
+                chip_df["status"] = chip_df["status"].apply(chip)
+                display_cols = [
+                    "company_name", "role_title", "salary", "city", "country",
+                    "applied_date", "followup_date", "status", "followup_method", "notes"
+                ]
+                chip_df = chip_df[[c for c in display_cols if c in chip_df.columns]]
+                st.write(chip_df.to_html(escape=False), unsafe_allow_html=True)       
+    else:
+        st.write("No applications found.")
 
 elif option == "Add Application":
     st.header("Add New Application")

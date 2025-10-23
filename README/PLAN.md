@@ -38,8 +38,8 @@
 - [.] Implement login/signup UI with backend integration  
 
 **Day 7**  
-- [ ] Build Applications List view (fetch GET /apps, show table)  
-- [ ] Add filter tabs and status chips  
+- [.] Build Applications List view (fetch GET /apps, show table)  
+- [.] Add filter tabs and status chips  
 
 **Day 8**  
 - [ ] Implement Add Application form, Edit modal, Delete action  
