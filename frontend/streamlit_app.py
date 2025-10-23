@@ -89,15 +89,15 @@ if option == "Dashboard":
     apps = fetch_apps(st.session_state.token)
     if apps:
         df = pd.DataFrame(apps)
-        cols = [
-            "company_name", "role_title", "salary",          
-            "city", "country", "applied_date",    
-            "followup_date", "status", "followup_method", 
-            "notes"           
-        ]
+        # cols = [
+        #     "company_name", "role_title", "salary",          
+        #     "city", "country", "applied_date",    
+        #     "followup_date", "status", "followup_method", 
+        #     "notes"           
+        # ]
 
-        display_cols = [c for c in cols if c in df.columns]
-        st.dataframe(df[display_cols])
+        # display_cols = [c for c in cols if c in df.columns]
+        # st.dataframe(df[display_cols])
 
         statuses = ["All", "pending", "followed-up", "not-responded", "rejected", "accepted"]
         tabs = st.tabs(statuses)
