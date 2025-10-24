@@ -49,6 +49,30 @@ def fetch_apps(token):
     else:
         st.error("Failed to fetch applications.")
         return []
+    
+def add_app(data, token):
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.post(f"{API_URL}/apps", json=data, headers=headers)
+    return resp
+
+def edit_app(app_id, data, token):
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.put(f"{API_URL}/apps/{app_id}", json=data, headers=headers)
+    return resp
+
+def make_edit_button(row_id):
+    return f'<form action="" method="post"><button name="edit_clicked" value="{row_id}" style="background:#3075d1;color:white;border:none;padding:3px 12px;border-radius:6px;">Edit</button></form>'
+
+def delete_app(app_id, token):
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.delete(f"{API_URL}/apps/{app_id}", headers=headers)
+    return resp
+    
+edit_clicked = st.query_params.get("edit_clicked", None)
+if edit_clicked:
+    st.session_state["editing_id"] = int(edit_clicked)
+    st.query_params.pop("edit_clicked")  # Remove the query param after reading it
+    st.rerun()
 
 # --- Authentication gating ---
 if "token" not in st.session_state:
@@ -71,6 +95,7 @@ if "nav" not in st.session_state:
 if st.session_state.get(FORCE_NAV_KEY):
     st.session_state["nav"] = "Dashboard"
     del st.session_state[FORCE_NAV_KEY]
+    st.rerun()
 
 option = st.sidebar.radio(
     "Go to",
@@ -89,15 +114,25 @@ if option == "Dashboard":
     apps = fetch_apps(st.session_state.token)
     if apps:
         df = pd.DataFrame(apps)
-        # cols = [
-        #     "company_name", "role_title", "salary",          
-        #     "city", "country", "applied_date",    
-        #     "followup_date", "status", "followup_method", 
-        #     "notes"           
-        # ]
 
-        # display_cols = [c for c in cols if c in df.columns]
-        # st.dataframe(df[display_cols])
+        # Format applied_date and followup_date to show only date part
+        df['applied_date'] = pd.to_datetime(df['applied_date']).dt.date.astype(str)
+        df['followup_date'] = pd.to_datetime(df['followup_date']).dt.date.astype(str)
+
+        # Status chip formatter
+        def chip(s):
+            color = {
+                "pending": "#FFE066",
+                "followed-up": "#B8F2E6",
+                "not-responded": "#FFB4A2",
+                "rejected": "#E63946",
+                "accepted": "#4CAF50"
+            }.get(s, "#d3d3d3")
+            return f'<span style="background-color:{color};color:#222;padding:2px 8px;border-radius:8px;">{s.title()}</span>'
+
+        # Apply chips just for display, not for actual editing values
+        chip_df = df.copy()
+        chip_df["status_chip"] = chip_df["status"].apply(chip)
 
         statuses = ["All", "pending", "followed-up", "not-responded", "rejected", "accepted"]
         tabs = st.tabs(statuses)
@@ -105,38 +140,139 @@ if option == "Dashboard":
             with tabs[idx]:
                 if status == "All":
                     filtered_df = df
+                    filtered_chip_df = chip_df
                 else:
                     filtered_df = df[df["status"] == status]
+                    filtered_chip_df = chip_df[chip_df["status"] == status]
 
                 st.write(f"Showing {len(filtered_df)} applications with status: {status if status != 'All' else 'any'}")
 
-                # Status chip formatter
-                def chip(s):
-                    color = {
-                        "pending": "#FFE066",
-                        "followed-up": "#B8F2E6",
-                        "not-responded": "#FFB4A2",
-                        "rejected": "#E63946",
-                        "accepted": "#4CAF50"
-                    }.get(s, "#d3d3d3")
-                    return f'<span style="background-color:{color};color:#222;padding:2px 8px;border-radius:8px;">{s.title()}</span>'
-
-                # Apply chips
-                chip_df = filtered_df.copy()
-                chip_df["status"] = chip_df["status"].apply(chip)
                 display_cols = [
                     "company_name", "role_title", "salary", "city", "country",
-                    "applied_date", "followup_date", "status", "followup_method", "notes"
+                    "applied_date", "followup_date", "status_chip", "followup_method", "notes"
                 ]
-                chip_df = chip_df[[c for c in display_cols if c in chip_df.columns]]
-                st.write(chip_df.to_html(escape=False), unsafe_allow_html=True)       
+
+                # Render table using st.columns for native buttons
+                header_cols = st.columns(len(display_cols) + 1)
+                for i, col in enumerate(display_cols):
+                    header_cols[i].markdown(f"**{col.replace('_chip','').replace('_',' ').title()}**")
+                header_cols[-1].markdown("**Edit**")
+
+                for i, row in filtered_chip_df.iterrows():
+                    row_cols = st.columns(len(display_cols) + 1)
+                    for j, col in enumerate(display_cols):
+                        row_cols[j].write(row[col], unsafe_allow_html=True)
+                    # True Streamlit button, not HTML
+                    if row_cols[-1].button("Edit", key=f"editbtn_{row['id']}_{idx}"):
+                        st.session_state['editing_id'] = row['id']
+                        st.session_state['editing_tab_status'] = status
+                        st.rerun()
+
+        # --- EDIT FORM ---
+        if 'editing_id' in st.session_state:
+            editing_id = st.session_state['editing_id']
+            editing_row = df[df['id'] == editing_id].iloc[0]
+            st.markdown("---")
+            st.subheader(f"Edit Application: {editing_row['company_name']} - {editing_row['role_title']}")
+            with st.form("edit_application_form"):
+                edit_company = st.text_input("Company Name", value=editing_row['company_name'])
+                edit_role = st.text_input("Role Title", value=editing_row['role_title'])
+                edit_salary = st.text_input("Salary", value=editing_row['salary'])
+                edit_city = st.text_input("City", value=editing_row['city'])
+                edit_country = st.text_input("Country", value=editing_row['country'])
+                edit_applied = st.text_input("Applied Date", value=editing_row['applied_date'])
+                edit_followup = st.text_input("Followup Date", value=editing_row['followup_date'])
+                edit_status = st.selectbox(
+                    "Status", 
+                    ["pending", "followed-up", "not-responded", "rejected", "accepted"],
+                    index=["pending", "followed-up", "not-responded", "rejected", "accepted"].index(editing_row['status']),
+                )
+                edit_method = st.text_input("Followup Method", value=editing_row['followup_method'])
+                edit_notes = st.text_area("Notes", value=editing_row['notes'])
+                
+                # col1, col2, col3 = st.columns([2, 2, 2])
+                # submitted = col1.form_submit_button("Save Changes")
+                # cancel = col2.form_submit_button("Cancel Edit")
+                # delete = col3.form_submit_button("Delete Application")
+
+                submitted = st.form_submit_button("Save Changes")
+                cancel = st.form_submit_button("Cancel Edit")
+                delete = st.form_submit_button("Delete")
+
+                if submitted:
+                    data = {
+                        "company_name": edit_company,
+                        "role_title": edit_role,
+                        "salary": edit_salary,
+                        "city": edit_city,
+                        "country": edit_country,
+                        "applied_date": edit_applied,
+                        "followup_date": edit_followup,
+                        "status": edit_status,
+                        "followup_method": edit_method,
+                        "notes": edit_notes
+                    }
+                    resp = edit_app(editing_id, data, st.session_state.token)
+                    if resp.status_code == 200:
+                        st.success("Application updated! Refresh to see changes.")
+                        del st.session_state['editing_id']
+                        del st.session_state['editing_tab_status']
+                        st.session_state[FORCE_NAV_KEY] = True
+                        st.rerun()
+                    else:
+                        st.error(f"Edit failed: {resp.text}")
+                elif cancel:
+                    del st.session_state['editing_id']
+                    del st.session_state['editing_tab_status']
+                    st.rerun()
+                elif delete:
+                    resp = delete_app(editing_id, st.session_state.token)
+                    if resp.status_code == 200:
+                        st.success("Application deleted!")
+                        del st.session_state['editing_id']
+                        del st.session_state['editing_tab_status']
+                        st.session_state[FORCE_NAV_KEY] = True
+                        st.rerun()
+                    else:
+                        st.error(f"Delete failed: {resp.text}")
     else:
         st.write("No applications found.")
 
 elif option == "Add Application":
-    st.header("Add New Application")
-    st.info("Fill in details to submit a new application.")
-    # TODO: Add form for new application
+    with st.form("add_app_form"):
+        company_name = st.text_input("Company", max_chars=100)
+        role_title = st.text_input("Role Title", max_chars=100)
+        salary = st.text_input("Salary")
+        city = st.text_input("City", max_chars=50)
+        country = st.text_input("Country", max_chars=50)
+        applied_date = st.date_input("Applied Date")
+        followup_date = st.date_input("Follow-up Date", value=None)
+        status = st.selectbox("Status", ["pending", "followed-up", "not-responded", "rejected", "accepted"])
+        followup_method = st.selectbox("Follow-up Method", ["email", "phone", "portal", "other"])
+        notes = st.text_area("Notes", max_chars=300)
+
+        submitted = st.form_submit_button("Add Application")
+
+        if submitted:
+            data = {
+                "company_name": company_name,
+                "role_title": role_title,
+                "salary": salary,
+                "city": city,
+                "country": country,
+                "applied_date": str(applied_date),
+                "followup_date": str(followup_date) if followup_date else None,
+                "status": status,
+                "followup_method": followup_method,
+                "notes": notes
+            }
+            resp = add_app(data, st.session_state.token)
+            if resp.status_code == 200:
+                st.success("Application added! Go to Dashboard to see it.")
+                st.session_state[FORCE_NAV_KEY] = True
+                st.rerun()
+            else:
+                st.error(f"Application add failed: {resp.text}")
 
 elif option == "Settings":
     st.header("Settings")

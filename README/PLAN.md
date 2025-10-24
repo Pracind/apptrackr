@@ -42,8 +42,8 @@
 - [.] Add filter tabs and status chips  
 
 **Day 8**  
-- [ ] Implement Add Application form, Edit modal, Delete action  
-- [ ] Ensure instant UI refresh after CRUD actions  
+- [.] Implement Add Application form, Edit modal, Delete action  
+- [.] Ensure instant UI refresh after CRUD actions  
 
 ## Days 9–11: Automation & Notifications  
 **Day 9**  
