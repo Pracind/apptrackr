@@ -15,11 +15,13 @@ class Application(SQLModel, table=True):
     salary: Optional[str] = None
 
     applied_date: datetime
-    followup_date: Optional[datetime] = None
+    followup_date: datetime = None
 
     # Choices: "pending", "followed-up", "not-responded", "rejected", "accepted"
     status: str = Field(default="pending")
     followup_method: Optional[str] = None  # e.g. "email", "portal", "LinkedIn"
+
+    followed_up_at: Optional[datetime] = None
 
     notes: Optional[str] = None
 

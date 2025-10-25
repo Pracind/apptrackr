@@ -1,6 +1,11 @@
 import streamlit as st
 import requests
 import pandas as pd
+from datetime import date, timedelta, datetime
+from streamlit_autorefresh import st_autorefresh
+
+
+st_autorefresh(interval=30000)
 
 
 API_URL = "http://127.0.0.1:8000"
@@ -115,6 +120,35 @@ if option == "Dashboard":
     if apps:
         df = pd.DataFrame(apps)
 
+        today = date.today()
+        for i, row in df.iterrows():
+            print(row)
+            print("followed_up_at:", row.get("followed_up_at"))
+
+            if row["status"] == "active" and row["followup_date"]:
+                try:
+                    followup_dt = pd.to_datetime(row["followup_date"]).date()
+                    if followup_dt <= today:
+                        df.at[i, "status"] = "pending"
+                        updated_data = row.to_dict()
+                        updated_data["status"] = "pending"
+                        edit_app(row["id"], updated_data, st.session_state.token)
+                except Exception:
+                    pass
+
+            if row["status"] == "followed-up" and "followed_up_at" in row and pd.notnull(row["followed_up_at"]):
+    
+                try:
+                    fua = pd.to_datetime(row["followed_up_at"])
+                    now = datetime.now()
+                    if now >= (fua + timedelta(day = 7)): #day = 7
+                        df.at[i, "status"] = "not-responded"
+                        updated_data = row.to_dict()
+                        updated_data["status"] = "not-responded"
+                        edit_app(row["id"], updated_data, st.session_state.token)
+                except Exception:
+                    pass
+
         # Format applied_date and followup_date to show only date part
         df['applied_date'] = pd.to_datetime(df['applied_date']).dt.date.astype(str)
         df['followup_date'] = pd.to_datetime(df['followup_date']).dt.date.astype(str)
@@ -122,11 +156,12 @@ if option == "Dashboard":
         # Status chip formatter
         def chip(s):
             color = {
+                "active": "#4CAF50",
                 "pending": "#FFE066",
                 "followed-up": "#B8F2E6",
                 "not-responded": "#FFB4A2",
                 "rejected": "#E63946",
-                "accepted": "#4CAF50"
+                "accepted": "#02FFFB"
             }.get(s, "#d3d3d3")
             return f'<span style="background-color:{color};color:#222;padding:2px 8px;border-radius:8px;">{s.title()}</span>'
 
@@ -134,7 +169,7 @@ if option == "Dashboard":
         chip_df = df.copy()
         chip_df["status_chip"] = chip_df["status"].apply(chip)
 
-        statuses = ["All", "pending", "followed-up", "not-responded", "rejected", "accepted"]
+        statuses = ["All", "active", "pending", "followed-up", "not-responded", "rejected", "accepted"]
         tabs = st.tabs(statuses)
         for idx, status in enumerate(statuses):
             with tabs[idx]:
@@ -168,7 +203,7 @@ if option == "Dashboard":
                         st.session_state['editing_tab_status'] = status
                         st.rerun()
 
-        # --- EDIT FORM ---
+        # --- EDIT FORM --
         if 'editing_id' in st.session_state:
             editing_id = st.session_state['editing_id']
             editing_row = df[df['id'] == editing_id].iloc[0]
@@ -184,16 +219,11 @@ if option == "Dashboard":
                 edit_followup = st.text_input("Followup Date", value=editing_row['followup_date'])
                 edit_status = st.selectbox(
                     "Status", 
-                    ["pending", "followed-up", "not-responded", "rejected", "accepted"],
-                    index=["pending", "followed-up", "not-responded", "rejected", "accepted"].index(editing_row['status']),
+                    ["active", "pending", "followed-up", "not-responded", "rejected", "accepted"],
+                    index=["active" ,"pending", "followed-up", "not-responded", "rejected", "accepted"].index(editing_row['status']),
                 )
                 edit_method = st.text_input("Followup Method", value=editing_row['followup_method'])
                 edit_notes = st.text_area("Notes", value=editing_row['notes'])
-                
-                # col1, col2, col3 = st.columns([2, 2, 2])
-                # submitted = col1.form_submit_button("Save Changes")
-                # cancel = col2.form_submit_button("Cancel Edit")
-                # delete = col3.form_submit_button("Delete Application")
 
                 submitted = st.form_submit_button("Save Changes")
                 cancel = st.form_submit_button("Cancel Edit")
@@ -212,6 +242,10 @@ if option == "Dashboard":
                         "followup_method": edit_method,
                         "notes": edit_notes
                     }
+
+                    if edit_status == "followed-up":
+                        data["followed_up_at"] = datetime.now().isoformat()
+    
                     resp = edit_app(editing_id, data, st.session_state.token)
                     if resp.status_code == 200:
                         st.success("Application updated! Refresh to see changes.")
@@ -226,15 +260,42 @@ if option == "Dashboard":
                     del st.session_state['editing_tab_status']
                     st.rerun()
                 elif delete:
-                    resp = delete_app(editing_id, st.session_state.token)
-                    if resp.status_code == 200:
-                        st.success("Application deleted!")
-                        del st.session_state['editing_id']
-                        del st.session_state['editing_tab_status']
-                        st.session_state[FORCE_NAV_KEY] = True
-                        st.rerun()
-                    else:
-                        st.error(f"Delete failed: {resp.text}")
+                    st.session_state['confirm_delete'] = True
+                    st.rerun()
+        
+        # --- DELETE CONFIRMATION (outside form) ---
+        if 'confirm_delete' not in st.session_state:
+            st.session_state['confirm_delete'] = False
+
+        # Only show confirmation if editing_id exists AND delete was clicked
+        if st.session_state.get('confirm_delete', False) and 'editing_id' in st.session_state:
+            st.warning("Are you sure you want to delete this application? This action cannot be undone.")
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                confirm = st.button("Yes, Delete", key="yes_delete")
+            with col2:
+                cancel_confirm = st.button("Cancel", key="cancel_delete_confirm")
+
+            if confirm:
+                resp = delete_app(st.session_state['editing_id'], st.session_state.token)
+                if resp.status_code == 200:
+                    st.success("Application deleted!")
+                    st.session_state['confirm_delete'] = False
+                    del st.session_state['editing_id']
+                    del st.session_state['editing_tab_status']
+                    st.session_state[FORCE_NAV_KEY] = True
+                    st.rerun()
+                else:
+                    st.error(f"Delete failed: {resp.text}")
+                    st.session_state['confirm_delete'] = False
+            elif cancel_confirm:
+                st.session_state['confirm_delete'] = False
+                st.rerun()
+
+        else:
+            # Always reset it if not currently editing
+            st.session_state['confirm_delete'] = False
+
     else:
         st.write("No applications found.")
 
@@ -247,32 +308,53 @@ elif option == "Add Application":
         country = st.text_input("Country", max_chars=50)
         applied_date = st.date_input("Applied Date")
         followup_date = st.date_input("Follow-up Date", value=None)
-        status = st.selectbox("Status", ["pending", "followed-up", "not-responded", "rejected", "accepted"])
+        status = st.selectbox("Status", ["active", "pending", "followed-up", "not-responded", "rejected", "accepted"])
         followup_method = st.selectbox("Follow-up Method", ["email", "phone", "portal", "other"])
         notes = st.text_area("Notes", max_chars=300)
 
         submitted = st.form_submit_button("Add Application")
 
         if submitted:
-            data = {
-                "company_name": company_name,
-                "role_title": role_title,
-                "salary": salary,
-                "city": city,
-                "country": country,
-                "applied_date": str(applied_date),
-                "followup_date": str(followup_date) if followup_date else None,
-                "status": status,
-                "followup_method": followup_method,
-                "notes": notes
-            }
-            resp = add_app(data, st.session_state.token)
-            if resp.status_code == 200:
-                st.success("Application added! Go to Dashboard to see it.")
-                st.session_state[FORCE_NAV_KEY] = True
-                st.rerun()
+            # Simple required field validation (all except notes)
+            missing_fields = []
+            if not company_name:
+                missing_fields.append("Company")
+            if not role_title:
+                missing_fields.append("Role Title")
+            if not city:
+                missing_fields.append("City")
+            if not country:
+                missing_fields.append("Country")
+            if not applied_date:
+                missing_fields.append("Applied Date")
+            if not followup_date:
+                missing_fields.append("Follow-up Date")
+            if not status:
+                missing_fields.append("Status")
+
+            if missing_fields:
+                st.warning(f"Please fill in all required fields: {', '.join(missing_fields)}")
+                
             else:
-                st.error(f"Application add failed: {resp.text}")
+                data = {
+                    "company_name": company_name,
+                    "role_title": role_title,
+                    "salary": salary,
+                    "city": city,
+                    "country": country,
+                    "applied_date": str(applied_date),
+                    "followup_date": str(followup_date) if followup_date else None,
+                    "status": status,
+                    "followup_method": followup_method,
+                    "notes": notes
+                }
+                resp = add_app(data, st.session_state.token)
+                if resp.status_code == 200:
+                    st.success("Application added! Go to Dashboard to see it.")
+                    st.session_state[FORCE_NAV_KEY] = True
+                    st.rerun()
+                else:
+                    st.error(f"Application add failed: {resp.text}")
 
 elif option == "Settings":
     st.header("Settings")

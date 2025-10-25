@@ -47,8 +47,8 @@
 
 ## Days 9–11: Automation & Notifications  
 **Day 9**  
-- [ ] Implement follow-up logic function (check_followups) in backend  
-- [ ] Add POST /cron/check-followups endpoint  
+- [.] Implement follow-up logic function (check_followups) in backend  
+- [.] Add POST /cron/check-followups endpoint  
 
 **Day 10**  
 - [ ] Integrate APScheduler for periodic automation  
@@ -81,3 +81,7 @@
 - [ ] Add screenshots, features, CV section  
 - [ ] Deploy backend (Render/Railway) and frontend (Streamlit Cloud)  
 - [ ] Smoke test live demo and fix deployment issues  
+
+
+
+Setup github action workflow day 9 

@@ -60,6 +60,7 @@ class UpdateAppRequest(BaseModel):
     status: Optional[str] = None
     followup_method: Optional[str] = None
     notes: Optional[str] = None
+    followed_up_at: Optional[datetime] = None
 
 class SignupRequest(BaseModel):
     email: str
@@ -176,6 +177,32 @@ def delete_app(id: int, current_user: dict = Depends(get_current_user)):
         session.delete(db_app)
         session.commit()
         return {"detail": "Application deleted"}
+    
+
+@app.post("/cron/check-followups")
+def check_followups():
+    """Automatically updates app statuses based on followup rules."""
+    updated_count = 0
+    today = datetime.utcnow().date()
+
+    with Session(engine) as session:
+        # 1. Move Active -> Pending when followup_date has passed or is today
+        active_apps = session.exec(select(Application).where(Application.status == "active")).all()
+        for app in active_apps:
+            if app.followup_date and app.followup_date.date() <= today:
+                app.status = "pending"
+                updated_count += 1
+
+        # 2. Move Followed-up -> Not Responded after 7 days
+        followed_up_apps = session.exec(select(Application).where(Application.status == "followed-up")).all()
+        for app in followed_up_apps:
+            if app.followed_up_at and datetime.utcnow() >= (app.followed_up_at + timedelta(days=7)):
+                app.status = "not-responded"
+                updated_count += 1
+
+        session.commit()
+
+    return {"updated": updated_count, "message": f"{updated_count} applications were updated automatically."}
 
     
 
