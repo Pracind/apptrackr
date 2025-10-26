@@ -36,4 +36,9 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     is_active: bool = Field(default=True)
 
+class CronLog(SQLModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    job_name: str
+    last_run: datetime
+
 

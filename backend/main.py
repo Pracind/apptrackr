@@ -8,6 +8,20 @@ from pydantic import BaseModel
 import jwt
 from typing import Optional
 from datetime import datetime, timedelta
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
+import logging
+from backend.models import CronLog
+
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+
+logging.getLogger("uvicorn").setLevel(logging.WARNING)
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 SECRET_KEY = "superdupersecret"
 ALGORITHM = "HS256"
@@ -177,32 +191,68 @@ def delete_app(id: int, current_user: dict = Depends(get_current_user)):
         session.delete(db_app)
         session.commit()
         return {"detail": "Application deleted"}
-    
 
-@app.post("/cron/check-followups")
-def check_followups():
-    """Automatically updates app statuses based on followup rules."""
+
+def run_cron_updates():
+    logger.info("APScheduler: Running automatic followup check…")
+    from sqlmodel import Session, select
+    from backend.db import engine
+    from backend.models import Application
+
     updated_count = 0
     today = datetime.utcnow().date()
-
     with Session(engine) as session:
-        # 1. Move Active -> Pending when followup_date has passed or is today
+        # Move Active -> Pending
         active_apps = session.exec(select(Application).where(Application.status == "active")).all()
         for app in active_apps:
             if app.followup_date and app.followup_date.date() <= today:
                 app.status = "pending"
                 updated_count += 1
 
-        # 2. Move Followed-up -> Not Responded after 7 days
+        # Move Followed-up -> Not Responded after 7 days
         followed_up_apps = session.exec(select(Application).where(Application.status == "followed-up")).all()
         for app in followed_up_apps:
             if app.followed_up_at and datetime.utcnow() >= (app.followed_up_at + timedelta(days=7)):
                 app.status = "not-responded"
                 updated_count += 1
+        
+        cron_entry = session.exec(select(CronLog).where(CronLog.job_name == "followup_check")).first()
+        now = datetime.utcnow()
+        if cron_entry:
+            cron_entry.last_run = now
+        else:
+            cron_entry = CronLog(job_name="followup_check", last_run=now)
+            session.add(cron_entry)
 
         session.commit()
+    logger.info(f"[APScheduler] Updated {updated_count} applications via automation")
 
-    return {"updated": updated_count, "message": f"{updated_count} applications were updated automatically."}
+@app.get("/cron/last-run")
+def get_last_run():
+    with Session(engine) as session:
+        cron_entry = session.exec(select(CronLog).where(CronLog.job_name == "followup_check")).first()
+        if cron_entry:
+            return {"last_run": cron_entry.last_run.isoformat()}
+        else:
+            return {"last_run": None}
+
+scheduler = None
+
+@app.on_event("startup")
+async def startup_event():
+    global scheduler
+    logger.info("FastAPI: Starting up and initializing scheduler...")
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(run_cron_updates, 'interval', hours = 24)
+    scheduler.start()
+    logger.info("FastAPI: Scheduler started successfully!")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global scheduler
+    if scheduler:
+        logger.info("FastAPI: Shutting down scheduler...")
+        scheduler.shutdown()
 
     
 

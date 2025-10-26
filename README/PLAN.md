@@ -51,8 +51,8 @@
 - [.] Add POST /cron/check-followups endpoint  
 
 **Day 10**  
-- [ ] Integrate APScheduler for periodic automation  
-- [ ] Add logging and last_run timestamp tracking  
+- [.] Integrate APScheduler for periodic automation  
+- [.] Add logging and last_run timestamp tracking  
 
 **Day 11**  
 - [ ] Frontend: add dashboard notification banner/bell  
