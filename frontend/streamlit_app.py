@@ -21,10 +21,9 @@ def show_login():
         resp = requests.post(f"{API_URL}/login", json={"email": email, "password": password})
         if resp.status_code == 200:
             st.success("Login successful!")
-            # st.session_state.token = resp.json()["token"]
-            # st.session_state.email = email
             user_data = resp.json()
             st.session_state.token = user_data["token"]
+            print("DEBUG TOKEN:", user_data["token"])
             st.session_state.email = user_data["user"]["email"]
             st.session_state.name = user_data["user"]["name"]
 
@@ -72,6 +71,27 @@ def delete_app(app_id, token):
     headers = {"Authorization": f"Bearer {token}"}
     resp = requests.delete(f"{API_URL}/apps/{app_id}", headers=headers)
     return resp
+
+
+def get_notifications():
+    token = st.session_state.get("token")
+    if not token:
+        return []
+    headers = {"Authorization": f"Bearer {token}"}
+    response = requests.get(f"{API_URL}/notifications", headers=headers)
+    if response.ok:
+        return response.json()
+    return []
+
+def mark_notifications_as_read():
+    token = st.session_state.get("token")
+    if not token:
+        return
+    headers = {"Authorization": f"Bearer {token}"}
+    requests.post(f"{API_URL}/notifications/mark-read", headers=headers)
+
+
+
     
 edit_clicked = st.query_params.get("edit_clicked", None)
 if edit_clicked:
@@ -90,6 +110,24 @@ if "token" not in st.session_state:
 
 # --- Authenticated user interface ---
 st.sidebar.success(f"Welcome, {st.session_state.get('name', 'user').title()}")
+
+notifications = get_notifications()
+notif_count = len(notifications)
+bell_icon = "🔔"
+badge = f"<span style='background-color:red;color:white;font-size:1em;padding:0.2em 0.6em;border-radius:50%'>{notif_count}</span>" if notif_count > 0 else ""
+
+notification_open = st.button(f"{bell_icon} {badge}", key="notif_bell")
+
+if notification_open:
+    # Show notifications ONLY when bell is clicked
+    if notif_count == 0:
+        st.info("No new notifications.")
+    else:
+        for notif in notifications:
+            st.markdown(f"- {notif['message']}")
+        if st.button("Mark all as read"):
+            mark_notifications_as_read()
+            st.rerun()
 
 # Navigation sidebar
 st.sidebar.header("Navigation")
@@ -360,6 +398,9 @@ elif option == "Settings":
     st.header("Settings")
     st.info("Configure your preferences.")
     # TODO: Add settings management
+
+
+
 
 # Footer
 st.markdown("---")

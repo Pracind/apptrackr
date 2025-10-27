@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
 import logging
-from backend.models import CronLog
+from backend.models import CronLog, AppNotification, Application
 
 logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
@@ -191,23 +191,67 @@ def delete_app(id: int, current_user: dict = Depends(get_current_user)):
         session.delete(db_app)
         session.commit()
         return {"detail": "Application deleted"}
+    
+@app.get("/notifications")
+def get_notifications(current_user: dict = Depends(get_current_user)):
+    with Session(engine) as session:
+        notifications = session.exec(
+            select(AppNotification)
+            .where(AppNotification.user_id == current_user["id"])
+            .where(AppNotification.read == False)  # only unread
+            .order_by(AppNotification.created_at.desc())
+        ).all()
+        return notifications
+    
+@app.post("/notifications/mark-read")
+def mark_all_notifications_as_read(current_user: dict = Depends(get_current_user)):
+    with Session(engine) as session:
+        notifications = session.exec(
+            select(AppNotification)
+            .where(AppNotification.user_id == current_user["id"])
+            .where(AppNotification.read == False)
+        ).all()
+        for notif in notifications:
+            notif.read = True
+        session.commit()
+        return {"marked_read": len(notifications)}
+    
+@app.get("/debug/apps")
+def debug_apps():
+    with Session(engine) as session:
+        apps = session.exec(select(Application)).all()
+        return [{"id": a.id, "status": a.status, "followup_date": str(a.followup_date)} for a in apps]
 
 
 def run_cron_updates():
+    print("[DEBUG] run_cron_updates called")
+
     logger.info("APScheduler: Running automatic followup check…")
     from sqlmodel import Session, select
     from backend.db import engine
-    from backend.models import Application
+    from backend.models import Application, AppNotification, CronLog
 
     updated_count = 0
     today = datetime.utcnow().date()
+
     with Session(engine) as session:
         # Move Active -> Pending
         active_apps = session.exec(select(Application).where(Application.status == "active")).all()
+        print("[DEBUG] active_apps list:", active_apps)
+
         for app in active_apps:
             if app.followup_date and app.followup_date.date() <= today:
                 app.status = "pending"
                 updated_count += 1
+
+                notification = AppNotification(
+                    app_id=app.id,
+                    user_id=app.user_id,
+                    message=f"Follow-up date reached for {app.company_name} - {app.role_title}",
+                    created_at=datetime.utcnow()
+                )
+                print("Trying to add notification for app", app.id)
+                session.add(notification)
 
         # Move Followed-up -> Not Responded after 7 days
         followed_up_apps = session.exec(select(Application).where(Application.status == "followed-up")).all()
@@ -215,6 +259,15 @@ def run_cron_updates():
             if app.followed_up_at and datetime.utcnow() >= (app.followed_up_at + timedelta(days=7)):
                 app.status = "not-responded"
                 updated_count += 1
+
+                notification = AppNotification(
+                    app_id=app.id,
+                    user_id=app.user_id,
+                    message=f"No response after 7 days from {app.company_name} - {app.role_title}",
+                    created_at=datetime.utcnow()
+                )
+                print("Trying to add notification for app", app.id)
+                session.add(notification)
         
         cron_entry = session.exec(select(CronLog).where(CronLog.job_name == "followup_check")).first()
         now = datetime.utcnow()
@@ -243,7 +296,7 @@ async def startup_event():
     global scheduler
     logger.info("FastAPI: Starting up and initializing scheduler...")
     scheduler = BackgroundScheduler()
-    scheduler.add_job(run_cron_updates, 'interval', hours = 24)
+    scheduler.add_job(run_cron_updates, 'interval', seconds = 10)
     scheduler.start()
     logger.info("FastAPI: Scheduler started successfully!")
 

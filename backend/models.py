@@ -41,4 +41,11 @@ class CronLog(SQLModel, table=True):
     job_name: str
     last_run: datetime
 
+class AppNotification(SQLModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    app_id: int
+    user_id: int
+    message: str
+    created_at: datetime
+    read: bool = Field(default=False)
 
