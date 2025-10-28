@@ -1,6 +1,6 @@
 import pytest
 from sqlmodel import SQLModel, create_engine, Session
-from models import User, Application
+from backend.models import User, Application
 from datetime import datetime
 
 @pytest.fixture(name="session")

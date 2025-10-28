@@ -9,7 +9,6 @@ import jwt
 from typing import Optional
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
-import atexit
 import logging
 from backend.models import CronLog, AppNotification, Application
 
@@ -213,6 +212,7 @@ def mark_all_notifications_as_read(current_user: dict = Depends(get_current_user
         ).all()
         for notif in notifications:
             notif.read = True
+            session.add(notif)
         session.commit()
         return {"marked_read": len(notifications)}
     
@@ -223,18 +223,25 @@ def debug_apps():
         return [{"id": a.id, "status": a.status, "followup_date": str(a.followup_date)} for a in apps]
 
 
-def run_cron_updates():
-    print("[DEBUG] run_cron_updates called")
+def run_cron_updates(for_user_id=None, engine=None):
 
     logger.info("APScheduler: Running automatic followup check…")
     from sqlmodel import Session, select
-    from backend.db import engine
     from backend.models import Application, AppNotification, CronLog
+
+    if engine is None:
+        from backend.db import engine as default_engine
+        engine = default_engine
 
     updated_count = 0
     today = datetime.utcnow().date()
 
     with Session(engine) as session:
+
+        app_query = select(Application)
+        if for_user_id:
+            app_query = app_query.where(Application.user_id == int(for_user_id))
+
         # Move Active -> Pending
         active_apps = session.exec(select(Application).where(Application.status == "active")).all()
         print("[DEBUG] active_apps list:", active_apps)
@@ -250,7 +257,6 @@ def run_cron_updates():
                     message=f"Follow-up date reached for {app.company_name} - {app.role_title}",
                     created_at=datetime.utcnow()
                 )
-                print("Trying to add notification for app", app.id)
                 session.add(notification)
 
         # Move Followed-up -> Not Responded after 7 days
@@ -266,7 +272,6 @@ def run_cron_updates():
                     message=f"No response after 7 days from {app.company_name} - {app.role_title}",
                     created_at=datetime.utcnow()
                 )
-                print("Trying to add notification for app", app.id)
                 session.add(notification)
         
         cron_entry = session.exec(select(CronLog).where(CronLog.job_name == "followup_check")).first()
@@ -279,6 +284,12 @@ def run_cron_updates():
 
         session.commit()
     logger.info(f"[APScheduler] Updated {updated_count} applications via automation")
+    return updated_count
+
+@app.post("/automation/run-now")
+def run_automation_now(current_user: dict = Depends(get_current_user)):
+    count = run_cron_updates(for_user_id=current_user["id"])
+    return {"processed": count}
 
 @app.get("/cron/last-run")
 def get_last_run():

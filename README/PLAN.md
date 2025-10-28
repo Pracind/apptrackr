@@ -56,8 +56,8 @@
 
 **Day 11**  
 - [ ] Frontend: add dashboard notification banner/bell  
-- [ ] Implement button to manually run automation  
-- [ ] Write automation unit tests (simulate date/status transitions)  
+- [.] Implement button to manually run automation  
+- [.] Write automation unit tests (simulate date/status transitions)  
 
 ## Days 12–13: Analytics & Export  
 **Day 12**  

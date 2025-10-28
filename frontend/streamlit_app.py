@@ -90,6 +90,19 @@ def mark_notifications_as_read():
     headers = {"Authorization": f"Bearer {token}"}
     requests.post(f"{API_URL}/notifications/mark-read", headers=headers)
 
+def run_automation_now():
+    token = st.session_state.get("token")
+    if not token:
+        st.warning("You must be logged in.")
+        return
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.post(f"{API_URL}/automation/run-now", headers=headers)
+    if resp.ok:
+        res = resp.json()
+        st.success(f"Automation ran: processed {res.get('processed', '?')} applications")
+    else:
+        st.error("Failed to run automation!")
+
 
 
     
@@ -112,14 +125,20 @@ if "token" not in st.session_state:
 st.sidebar.success(f"Welcome, {st.session_state.get('name', 'user').title()}")
 
 notifications = get_notifications()
+print("Notifications after rerun:", notifications)
+print("Count after:", len(notifications))
+
 notif_count = len(notifications)
 bell_icon = "🔔"
-badge = f"<span style='background-color:red;color:white;font-size:1em;padding:0.2em 0.6em;border-radius:50%'>{notif_count}</span>" if notif_count > 0 else ""
+badge = f" {notif_count}" if notif_count > 0 else ""
+notification_open = st.button(f"{bell_icon}{badge}", key="notif_bell")
 
-notification_open = st.button(f"{bell_icon} {badge}", key="notif_bell")
 
 if notification_open:
-    # Show notifications ONLY when bell is clicked
+    
+    print("Notifications before marking as read:", notifications)
+    print("Count before:", notif_count)
+
     if notif_count == 0:
         st.info("No new notifications.")
     else:
@@ -153,39 +172,20 @@ st.write("Track and manage your job applications with ease.")
 
 if option == "Dashboard":
     st.header("Your Applications")
-    st.info("List and filter your job applications here.")
+    
+    col_header, col_refresh = st.columns([8,1])
+    with col_header:
+        st.info("List and filter your job applications here.")
+    with col_refresh:
+        if st.button("🔄", help="Run Automation Now"):
+            run_automation_now()
+            st.rerun()
+
     apps = fetch_apps(st.session_state.token)
     if apps:
         df = pd.DataFrame(apps)
 
         today = date.today()
-        for i, row in df.iterrows():
-            print(row)
-            print("followed_up_at:", row.get("followed_up_at"))
-
-            if row["status"] == "active" and row["followup_date"]:
-                try:
-                    followup_dt = pd.to_datetime(row["followup_date"]).date()
-                    if followup_dt <= today:
-                        df.at[i, "status"] = "pending"
-                        updated_data = row.to_dict()
-                        updated_data["status"] = "pending"
-                        edit_app(row["id"], updated_data, st.session_state.token)
-                except Exception:
-                    pass
-
-            if row["status"] == "followed-up" and "followed_up_at" in row and pd.notnull(row["followed_up_at"]):
-    
-                try:
-                    fua = pd.to_datetime(row["followed_up_at"])
-                    now = datetime.now()
-                    if now >= (fua + timedelta(day = 7)): #day = 7
-                        df.at[i, "status"] = "not-responded"
-                        updated_data = row.to_dict()
-                        updated_data["status"] = "not-responded"
-                        edit_app(row["id"], updated_data, st.session_state.token)
-                except Exception:
-                    pass
 
         # Format applied_date and followup_date to show only date part
         df['applied_date'] = pd.to_datetime(df['applied_date']).dt.date.astype(str)
