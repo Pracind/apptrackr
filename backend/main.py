@@ -299,6 +299,27 @@ def get_last_run():
             return {"last_run": cron_entry.last_run.isoformat()}
         else:
             return {"last_run": None}
+        
+
+@app.get("/metrics")
+def get_app_metrics(current_user: dict = Depends(get_current_user)):
+    with Session(engine) as session:
+        total_apps = len(list(session.exec(
+            select(Application).where(Application.user_id == current_user["id"])
+        )))
+        statuses = ["pending", "active", "followed-up", "not-responded", "rejected"]
+        status_counts = {}
+        for status in statuses:
+            status_counts[status] = len(list(session.exec(
+                select(Application).where(
+                    Application.user_id == current_user["id"],
+                    Application.status == status
+                )
+            )))
+    return {
+        "applications_total": total_apps,
+        "applications_by_status": status_counts,
+    }
 
 scheduler = None
 
