@@ -125,28 +125,35 @@ if "token" not in st.session_state:
 st.sidebar.success(f"Welcome, {st.session_state.get('name', 'user').title()}")
 
 notifications = get_notifications()
-print("Notifications after rerun:", notifications)
-print("Count after:", len(notifications))
 
 notif_count = len(notifications)
 bell_icon = "🔔"
 badge = f" {notif_count}" if notif_count > 0 else ""
-notification_open = st.button(f"{bell_icon}{badge}", key="notif_bell")
+#notification_open = st.button(f"{bell_icon}{badge}", key="notif_bell")
 
+if "notif_dropdown_open" not in st.session_state:
+    st.session_state["notif_dropdown_open"] = False
 
-if notification_open:
-    
-    print("Notifications before marking as read:", notifications)
-    print("Count before:", notif_count)
+if st.button(f"{bell_icon}{badge}", key="notif_bell"):
+    st.session_state["notif_dropdown_open"] = not st.session_state["notif_dropdown_open"]
+    st.rerun()
 
+if st.session_state["notif_dropdown_open"]:
+    print("Notifications panel open, count:", notif_count)
     if notif_count == 0:
         st.info("No new notifications.")
     else:
         for notif in notifications:
             st.markdown(f"- {notif['message']}")
-        if st.button("Mark all as read"):
+        # Mark all as read button
+        if st.button("Mark all as read", key="mark_all_read"):
+            print("Clearing notifs")
             mark_notifications_as_read()
+            print("Notifs cleared")
+            st.session_state["notif_dropdown_open"] = False
             st.rerun()
+
+
 
 # Navigation sidebar
 st.sidebar.header("Navigation")

@@ -55,13 +55,13 @@
 - [.] Add logging and last_run timestamp tracking  
 
 **Day 11**  
-- [ ] Frontend: add dashboard notification banner/bell  
+- [.] Frontend: add dashboard notification banner/bell  
 - [.] Implement button to manually run automation  
 - [.] Write automation unit tests (simulate date/status transitions)  
 
 ## Days 12–13: Analytics & Export  
 **Day 12**  
-- [ ] Implement backend GET /metrics endpoint  
+- [.] Implement backend GET /metrics endpoint  
 - [ ] Add tags field and filtering to Application model  
 - [ ] Add timeline/status change tracking for apps  
 

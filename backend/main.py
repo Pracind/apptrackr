@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 from backend.models import CronLog, AppNotification, Application
+import dateutil.parser
+
 
 logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
@@ -210,6 +212,7 @@ def mark_all_notifications_as_read(current_user: dict = Depends(get_current_user
             .where(AppNotification.user_id == current_user["id"])
             .where(AppNotification.read == False)
         ).all()
+        logger.info(f"Marking as read: {[n.id for n in notifications]}")
         for notif in notifications:
             notif.read = True
             session.add(notif)
@@ -220,7 +223,17 @@ def mark_all_notifications_as_read(current_user: dict = Depends(get_current_user
 def debug_apps():
     with Session(engine) as session:
         apps = session.exec(select(Application)).all()
-        return [{"id": a.id, "status": a.status, "followup_date": str(a.followup_date)} for a in apps]
+        result = []
+        for a in apps:
+            result.append({
+                "id": a.id,
+                "company": a.company_name,
+                "role": a.role_title,
+                "status": a.status,
+                "followup_date": str(a.followup_date),
+                "followed_up_at": str(a.followed_up_at) if hasattr(a, "followed_up_at") else None
+            })
+        return result
 
 
 def run_cron_updates(for_user_id=None, engine=None):
@@ -244,7 +257,7 @@ def run_cron_updates(for_user_id=None, engine=None):
 
         # Move Active -> Pending
         active_apps = session.exec(select(Application).where(Application.status == "active")).all()
-        print("[DEBUG] active_apps list:", active_apps)
+        #print("[DEBUG] active_apps list:", active_apps)
 
         for app in active_apps:
             if app.followup_date and app.followup_date.date() <= today:
@@ -262,14 +275,29 @@ def run_cron_updates(for_user_id=None, engine=None):
         # Move Followed-up -> Not Responded after 7 days
         followed_up_apps = session.exec(select(Application).where(Application.status == "followed-up")).all()
         for app in followed_up_apps:
-            if app.followed_up_at and datetime.utcnow() >= (app.followed_up_at + timedelta(days=7)):
+            logger.info(f"App {app.id}: status={app.status}, followed_up_at={app.followed_up_at} ({type(app.followed_up_at)})")
+            fup = app.followed_up_at
+            if fup:
+                if isinstance(fup, str):
+                    try:
+                        fup = dateutil.parser.parse(fup)
+                    except Exception as e:
+                        logger.warning(f"App {app.id} has bad followed_up_at string: {app.followed_up_at}, skipping.")
+                        continue
+            
+            print(datetime.utcnow())
+            print(fup + timedelta(seconds = 7))
+            print(datetime.utcnow() <= (fup + timedelta(seconds=7)))
+
+            if datetime.utcnow() <= (fup + timedelta(seconds=7)):
+                logger.info(f"Updating App {app.id} to not-responded")
                 app.status = "not-responded"
                 updated_count += 1
 
                 notification = AppNotification(
                     app_id=app.id,
                     user_id=app.user_id,
-                    message=f"No response after 7 days from {app.company_name} - {app.role_title}",
+                    message=f"No response from {app.company_name} - {app.role_title}",
                     created_at=datetime.utcnow()
                 )
                 session.add(notification)
