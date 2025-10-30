@@ -116,7 +116,8 @@ if edit_clicked:
 if "token" not in st.session_state:
     auth_mode = st.sidebar.radio("Account", ["Login", "Signup"])
     if auth_mode == "Login":
-        show_login()s
+        show_login()
+        
     else:
         show_signup()
     st.stop()
