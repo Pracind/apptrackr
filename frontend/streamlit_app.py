@@ -41,9 +41,9 @@ def show_signup():
     if st.button("Sign Up"):
         resp = requests.post(f"{API_URL}/signup", json={"email": email, "password": password, "name": name})
         if resp.status_code == 200:
-            st.success("Signup successful! Please go to the Login tab.")
+            st.success("Signup successful!")
         else:
-            st.error("Signup failed. Try a different email.")
+            st.error("Signup failed. Try again.")
 
 def fetch_apps(token):
     headers = {"Authorization": f"Bearer {token}"}
