@@ -292,13 +292,13 @@ def run_cron_updates(for_user_id=None, engine=None):
             if datetime.utcnow() <= (fup + timedelta(seconds=7)):
                 logger.info(f"Updating App {app.id} to not-responded")
                 app.status = "not-responded"
-                updated_count += 1
+                updated_count += 1 
 
                 notification = AppNotification(
                     app_id=app.id,
                     user_id=app.user_id,
                     message=f"No response from {app.company_name} - {app.role_title}",
-                    created_at=datetime.utcnow()
+                    created_at=datetime.utcnow() 
                 )
                 session.add(notification)
         
