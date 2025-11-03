@@ -49,3 +49,14 @@ class AppNotification(SQLModel, table=True):
     created_at: datetime
     read: bool = Field(default=False)
 
+
+class ApplicationTimeline(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    app_id: int = Field(foreign_key="application.id")
+    user_id: int = Field(foreign_key="user.id")
+    event_time: datetime = Field(default_factory=datetime.utcnow)
+    event_type: str                                   # e.g. 'status-changed'
+    old_status: Optional[str] = None
+    new_status: Optional[str] = None
+    notes: Optional[str] = None  
+

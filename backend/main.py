@@ -10,7 +10,7 @@ from typing import Optional
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
-from backend.models import CronLog, AppNotification, Application
+from backend.models import CronLog, AppNotification, Application, ApplicationTimeline
 import dateutil.parser
 
 
@@ -175,10 +175,25 @@ def update_app(id: int, app_in: UpdateAppRequest, current_user: dict = Depends(g
         if not db_app or db_app.user_id != current_user["id"]:
             raise HTTPException(status_code=404, detail="Application not found")
         app_data = app_in.dict(exclude_unset=True)
+
+
+        old_status = db_app.status
         for key, value in app_data.items():
             setattr(db_app, key, value)
         db_app.updated_at = datetime.utcnow()
         session.add(db_app)
+        if 'status' in app_data and app_data['status'] != old_status:
+            timeline = ApplicationTimeline(
+                app_id=db_app.id,
+                user_id=current_user["id"],
+                event_type="status-changed",
+                old_status=old_status,
+                new_status=app_data['status'],
+                notes=f"Status changed from {old_status} to {app_data['status']}"
+            )
+            session.add(timeline)
+
+
         session.commit()
         session.refresh(db_app)
         return db_app
@@ -272,6 +287,16 @@ def run_cron_updates(for_user_id=None, engine=None):
                 )
                 session.add(notification)
 
+                timeline = ApplicationTimeline(
+                    app_id=app.id,
+                    user_id=app.user_id,
+                    event_type="status-changed",
+                    old_status="active",
+                    new_status="pending",
+                    notes="Status auto-switched from active to pending by automation"
+                )
+                session.add(timeline)
+
         # Move Followed-up -> Not Responded after 7 days
         followed_up_apps = session.exec(select(Application).where(Application.status == "followed-up")).all()
         for app in followed_up_apps:
@@ -301,6 +326,16 @@ def run_cron_updates(for_user_id=None, engine=None):
                     created_at=datetime.utcnow() 
                 )
                 session.add(notification)
+
+                timeline = ApplicationTimeline(
+                    app_id=app.id,
+                    user_id=app.user_id,
+                    event_type="status-changed",
+                    old_status="followed-up",
+                    new_status="not-responded",
+                    notes="Status auto-switched from followed-up to not-responded by automation"
+                )
+                session.add(timeline)
         
         cron_entry = session.exec(select(CronLog).where(CronLog.job_name == "followup_check")).first()
         now = datetime.utcnow()
@@ -348,6 +383,17 @@ def get_app_metrics(current_user: dict = Depends(get_current_user)):
         "applications_total": total_apps,
         "applications_by_status": status_counts,
     }
+
+@app.get("/apps/{id}/timeline")
+def get_app_timeline(id: int, current_user: dict = Depends(get_current_user)):
+    with Session(engine) as session:
+        timeline = session.exec(
+            select(ApplicationTimeline)
+            .where(ApplicationTimeline.app_id == id)
+            .where(ApplicationTimeline.user_id == current_user["id"])
+            .order_by(ApplicationTimeline.event_time)
+        ).all()
+        return timeline
 
 scheduler = None
 

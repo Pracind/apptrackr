@@ -3,6 +3,8 @@ import requests
 import pandas as pd
 from datetime import date, timedelta, datetime
 from streamlit_autorefresh import st_autorefresh
+import pandas as pd
+import altair as alt
 
 
 st_autorefresh(interval=30000)
@@ -52,6 +54,24 @@ def fetch_apps(token):
         return resp.json()
     else:
         st.error("Failed to fetch applications.")
+        return []
+
+def fetch_metrics(token):
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.get(f"{API_URL}/metrics", headers=headers)
+    if resp.status_code == 200:
+        return resp.json()
+    else:
+        st.error("Failed to fetch metrics.")
+        return {"applications_total": 0, "applications_by_status": {}}
+    
+def fetch_app_timeline(app_id, token):
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.get(f"{API_URL}/apps/{app_id}/timeline", headers=headers)
+    if resp.status_code == 200:
+        return resp.json()
+    else:
+        st.error("Failed to fetch timeline.")
         return []
     
 def add_app(data, token):
@@ -169,10 +189,11 @@ if st.session_state.get(FORCE_NAV_KEY):
 
 option = st.sidebar.radio(
     "Go to",
-    ["Dashboard", "Add Application", "Settings"],
-    index=["Dashboard", "Add Application", "Settings"].index(st.session_state["nav"]),
+    ["Dashboard", "Add Application", "Metrics", "Settings"],
+    index=["Dashboard", "Add Application", "Metrics", "Settings"].index(st.session_state["nav"]),
     key="nav"
 )
+
 
 # App Header
 st.title("AppTrackr Job Applications")
@@ -342,6 +363,7 @@ if option == "Dashboard":
             # Always reset it if not currently editing
             st.session_state['confirm_delete'] = False
 
+
     else:
         st.write("No applications found.")
 
@@ -401,6 +423,103 @@ elif option == "Add Application":
                     st.rerun()
                 else:
                     st.error(f"Application add failed: {resp.text}")
+
+elif option == "Metrics":
+    st.header("📊 Application Metrics & Charts")
+
+    metrics = fetch_metrics(st.session_state.token)
+    status_counts = metrics["applications_by_status"]
+
+    status_order = ["Total Applications", "pending", "active", "followed-up", "not-responded", "rejected", "accepted"]
+    metrics_dict = {"Total Applications": metrics["applications_total"]}
+    metrics_dict.update({k.title(): status_counts.get(k, 0) for k in status_order[1:]})
+
+    cols = st.columns(len(metrics_dict))
+    for col, (label, val) in zip(cols, metrics_dict.items()):
+        col.metric(label, val)
+
+    st.markdown("---")
+
+    status_counts = metrics["applications_by_status"]
+    df_chart = pd.DataFrame({
+        "Status": list(status_counts.keys()),
+        "Count": list(status_counts.values())
+    })
+    df_chart["Count"] = df_chart["Count"].astype(int)
+
+    st.subheader("Applications by Status")
+    chart = alt.Chart(df_chart).mark_bar().encode(
+        x=alt.X('Status', sort=None),
+        y='Count',
+        color='Status'
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+    st.markdown("---")
+    st.header("📜 Application Timeline Viewer")
+
+    apps = fetch_apps(st.session_state.token)  # Reuse your fetch_apps to get all user's applications
+    if apps:
+        # Nice selector labels -- company + role, fallback to ID if missing name
+        app_options = [
+            {"id": app["id"], "label": f"{app['company_name']} – {app['role_title']}"}
+            for app in apps
+        ]
+        app_labels = [a["label"] for a in app_options]
+        app_ids = [a["id"] for a in app_options]
+
+        selected_idx = st.selectbox("Select an application to view timeline", range(len(app_labels)), format_func=lambda i: app_labels[i], key="metrics_timeline_app")
+
+        selected_app_id = app_ids[selected_idx]
+        app_info = next((a for a in apps if a["id"] == selected_app_id), None)
+
+
+        timeline = fetch_app_timeline(selected_app_id, st.session_state.token)
+        st.subheader(f"Timeline for {app_labels[selected_idx]}")
+
+        # Always show creation date first!
+        if app_info and "applied_date" in app_info:
+            applied_str = pd.to_datetime(app_info["applied_date"]).strftime("%Y-%m-%d %H:%M UTC")
+            st.markdown(f"- 📄 **Application created on:** {applied_str}")
+
+        if not timeline or len(timeline) == 0:
+            st.caption("No timeline events yet.")
+        else:
+            for event in timeline:
+                time_str = pd.to_datetime(event["event_time"]).strftime("%Y-%m-%d %H:%M UTC") 
+
+                old_status = event.get("old_status", "").replace("-", " ").title()
+                new_status = event.get("new_status", "").replace("-", " ").title() 
+                status_change = f"{old_status} → {new_status}" if old_status and new_status else ""
+
+                notes = event.get("notes", "")
+
+                if notes and "automation" in notes.lower():
+                    status_change += f" by automation"
+
+                main_msg = status_change if status_change else notes
+                
+                st.markdown(
+                    f"- {main_msg}  \n"
+                    f"  <small style='color:gray;'>{time_str}</small>",
+                    unsafe_allow_html=True,
+                )
+
+
+
+        st.markdown("---")
+        df = pd.DataFrame(apps)
+
+        # --- EXPORT TO CSV BUTTON ---
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Export All Applications to CSV",
+            data=csv,
+            file_name="applications.csv",
+            mime='text/csv'
+        )
+    else:
+        st.info("You don’t have any applications yet.")
 
 elif option == "Settings":
     st.header("Settings")

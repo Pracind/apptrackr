@@ -62,13 +62,12 @@
 ## Days 12–13: Analytics & Export  
 **Day 12**  
 - [.] Implement backend GET /metrics endpoint  
-- [ ] Add tags field and filtering to Application model  
-- [ ] Add timeline/status change tracking for apps  
+- [.] Add timeline/status change tracking for apps  
 
 **Day 13**  
-- [ ] Frontend: show metrics dashboard and charts  
-- [ ] Detail view: show application timeline  
-- [ ] Implement export to CSV  
+- [.] Frontend: show metrics dashboard and charts  
+- [.] Detail view: show application timeline  
+- [.] Implement export to CSV  
 - [ ] Write unit tests for metrics and exporting  
 
 ## Days 14–15: Demo, Docs, Deployment  
