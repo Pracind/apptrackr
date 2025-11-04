@@ -525,6 +525,7 @@ elif option == "Settings":
     st.header("Settings")
     st.info("Configure your preferences.")
     # TODO: Add settings management
+    
 
 
 

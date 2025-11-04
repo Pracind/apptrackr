@@ -1,7 +1,9 @@
 fastapi
-uvicorn
+uvicorn[standard]
 sqlmodel
-passlib
+sqlalchemy>=1.4
+passlib[bcrypt]
+pydantic
 python-jose[cryptography]
 apscheduler
-    
+python-dateutil

@@ -68,7 +68,7 @@
 - [.] Frontend: show metrics dashboard and charts  
 - [.] Detail view: show application timeline  
 - [.] Implement export to CSV  
-- [ ] Write unit tests for metrics and exporting  
+- [.] Write unit tests for metrics and exporting  
 
 ## Days 14–15: Demo, Docs, Deployment  
 **Day 14**  
