@@ -158,7 +158,7 @@ if "token" not in st.session_state:
     st.stop()
 
 # --- Authenticated user interface ---
-st.sidebar.success(f"Welcome, {st.session_state.get('name', 'user').title()}")
+st.sidebar.success(f"Welcome, {(st.session_state.get('name') or 'User').title()}")
 
 notifications = get_notifications()
 
