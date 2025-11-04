@@ -8,3 +8,5 @@ python-jose[cryptography]
 apscheduler
 python-dateutil
 PyJWT
+apscheduler
+python-dateutil
