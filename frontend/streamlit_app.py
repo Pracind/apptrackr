@@ -9,8 +9,23 @@ import altair as alt
 
 st_autorefresh(interval=30000)
 
+initial_keys = {
+    "nav": "Dashboard",
+    "notif_dropdown_open": False,
+    "editing_id": None,
+    "editing_tab_status": None,
+    "confirm_delete": False,
+    "token": None,
+    "email": None,
+    "name": None,
+    # add more as needed, e.g. "demo_mode": False, "draft_company": ""
+}
+for k, v in initial_keys.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-API_URL = "http://127.0.0.1:8000"
+
+API_URL = "https://apptrackr-1.onrender.com"
 FORCE_NAV_KEY = "force_dashboard"
 
 st.set_page_config(page_title="AppTrackr", layout="wide")
@@ -150,10 +165,7 @@ notifications = get_notifications()
 notif_count = len(notifications)
 bell_icon = "🔔"
 badge = f" {notif_count}" if notif_count > 0 else ""
-#notification_open = st.button(f"{bell_icon}{badge}", key="notif_bell")
 
-if "notif_dropdown_open" not in st.session_state:
-    st.session_state["notif_dropdown_open"] = False
 
 if st.button(f"{bell_icon}{badge}", key="notif_bell"):
     st.session_state["notif_dropdown_open"] = not st.session_state["notif_dropdown_open"]
@@ -179,8 +191,8 @@ if st.session_state["notif_dropdown_open"]:
 # Navigation sidebar
 st.sidebar.header("Navigation")
 
-if "nav" not in st.session_state:
-    st.session_state["nav"] = "Dashboard"
+nav = st.session_state.get("nav", "Dashboard")
+
 
 if st.session_state.get(FORCE_NAV_KEY):
     st.session_state["nav"] = "Dashboard"
