@@ -10,3 +10,8 @@ python-dateutil
 PyJWT
 apscheduler
 python-dateutil
+streamlit
+requests
+pandas
+altair
+streamlit-autorefresh
