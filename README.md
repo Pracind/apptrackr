@@ -26,8 +26,7 @@ cd apptrackr
 
 
 2. Install dependencies:
-pip install -r backend/requirements.txt
-pip install -r frontend/requirements.txt
+pip install -r backend/requirements.txt | pip install -r frontend/requirements.txt
 
 
 3. Run the backend:
