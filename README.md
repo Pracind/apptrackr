@@ -21,21 +21,26 @@ Track, manage, and visualize your job search with ease.
 ## 📦 Installation
 
 1. Clone the repo:
+```
 git clone https://github.com/yourname/apptrackr.git
 cd apptrackr
+```
 
 
 2. Install dependencies:
+```
 pip install -r requirements.txt
-
+```
 
 3. Run the backend:
+```
 uvicorn backend.main:app --reload
-
+```
 
 4. Start the frontend:
+```
 streamlit run frontend/streamlit_app.py
-
+```
 
 Open [http://localhost:8501](http://localhost:8501/) in your browser.
 
