@@ -25,7 +25,7 @@ for k, v in initial_keys.items():
         st.session_state[k] = v
 
 
-API_URL = "https://apptrackr.onrender.com"
+API_URL = "http://127.0.0.1:8000"  #"http://127.0.0.1:8000" , "https://apptrackr.onrender.com"
 FORCE_NAV_KEY = "force_dashboard"
 
 st.set_page_config(page_title="AppTrackr", layout="wide")
