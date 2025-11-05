@@ -375,11 +375,8 @@ if option == "Dashboard":
         # Only show confirmation if editing_id exists AND delete was clicked
         if st.session_state.get('confirm_delete', False) and 'editing_id' in st.session_state:
             st.warning("Are you sure you want to delete this application? This action cannot be undone.")
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                confirm = st.button("Yes, Delete", key="yes_delete")
-            with col2:
-                cancel_confirm = st.button("Cancel", key="cancel_delete_confirm")
+            confirm = st.button("Yes, Delete", key="yes_delete")
+            cancel_confirm = st.button("Cancel", key="cancel_delete_confirm")
 
             if confirm:
                 resp = delete_app(st.session_state['editing_id'], st.session_state.token)
@@ -652,7 +649,3 @@ elif option == "Settings":
 
 
 
-
-# Footer
-st.markdown("---")
-st.caption("Built with Streamlit • AppTrackr © 2025")
