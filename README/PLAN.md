@@ -70,13 +70,12 @@
 - [.] Implement export to CSV  
 - [.] Write unit tests for metrics and exporting  
 
-## Days 14–15: Demo, Docs, Deployment  
+## Days 14–15:Docs, Deployment  
 **Day 14**  
-- [ ] Implement public demo mode (demo dataset, read-only)  
-- [ ] Validate session persistence with Streamlit  
+- [.] Validate session persistence with Streamlit  
 
 **Day 15**  
-- [ ] Update README.md with install and run instructions  
+- [.] Update README.md with install and run instructions  
 - [ ] Add screenshots, features, CV section  
 - [ ] Deploy backend (Render/Railway) and frontend (Streamlit Cloud)  
 - [ ] Smoke test live demo and fix deployment issues  
