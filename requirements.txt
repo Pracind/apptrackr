@@ -1,18 +1,20 @@
-fastapi==0.95.2
-uvicorn[standard]==0.22.0
-sqlmodel==0.0.8
-sqlalchemy>=1.4
-passlib[bcrypt]==1.7.4
+fastapi==0.120.2
+uvicorn==0.34.0
+sqlmodel==0.0.27
+SQLAlchemy==2.0.44
+passlib==1.7.4
 bcrypt==4.0.1
-pydantic==1.10.11
-python-jose[cryptography]==3.3.0
-apscheduler==3.10.1
-python-dateutil==2.8.2
-PyJWT==2.8.0
+pydantic==2.9.2
+APScheduler==3.11.0
+python-dateutil==2.9.0.post0
+PyJWT==2.9.0
 
-# Frontend / misc
-streamlit==1.25.0
-requests==2.31.0
-pandas==2.2.3
-altair==5.0.1
-streamlit-autorefresh==0.1.5
+
+streamlit==1.47.1
+streamlit-autorefresh==1.0.1
+requests==2.32.4
+pandas==2.3.1
+altair==5.5.0
+
+
+ 
