@@ -1,35 +1,35 @@
-name: CI/CD - Deploy to EC2
+name: Deploy to EC2
 
 on:
   push:
     branches:
       - master
-  workflow_dispatch: {}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Prepare SSH key
-        env:
-          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/apptrackr_deploy_key
-          chmod 600 ~/.ssh/apptrackr_deploy_key
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+      - name: Copy files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "."
+          target: "/opt/apptrackr"
 
-      - name: Trigger remote deploy
-        env:
-          EC2_USER: ${{ secrets.EC2_USER }}
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_APP_DIR: ${{ secrets.EC2_APP_DIR }}
-          EC2_BRANCH: ${{ secrets.EC2_BRANCH }}
-        run: |
-          echo "🚀 Deploying to ${EC2_USER}@${EC2_HOST}"
-          ssh -i ~/.ssh/apptrackr_deploy_key -o StrictHostKeyChecking=yes ${EC2_USER}@${EC2_HOST} \
-            "cd ${EC2_APP_DIR} && git fetch origin --prune && git reset --hard origin/${EC2_BRANCH} && ./deploy.sh"
+      - name: Restart services
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /opt/apptrackr
+            source venv/bin/activate
+            pip install -r requirements.txt
+            sudo systemctl restart apptrackr-backend
+            sudo systemctl restart apptrackr-frontend
