@@ -32,4 +32,4 @@ jobs:
             source venv/bin/activate
             pip install -r requirements.txt
             sudo systemctl restart apptrackr-backend
-            sudo systemctl restart apptrackr-frontend
+            sudo systemctl restart apptrackr-frontend 
