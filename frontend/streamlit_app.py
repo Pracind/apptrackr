@@ -5,6 +5,7 @@ from datetime import date, timedelta, datetime
 from streamlit_autorefresh import st_autorefresh
 import pandas as pd
 import altair as alt
+import re
 
 
 st_autorefresh(interval=30000)
@@ -14,6 +15,11 @@ API_URL = "http://127.0.0.1:8000"
 FORCE_NAV_KEY = "force_dashboard"
 
 st.set_page_config(page_title="AppTrackr", layout="wide")
+
+def is_valid_email(email):
+    pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
+    return re.match(pattern, email)
+
 
 def show_login():
     st.subheader("Login")
@@ -34,18 +40,43 @@ def show_login():
         else:
             st.error("Invalid email or password")
 
-
 def show_signup():
     st.subheader("Signup")
     email = st.text_input("Email", key="signup_email")
     password = st.text_input("Password", type="password", key="signup_password")
     name = st.text_input("Name")
+
     if st.button("Sign Up"):
-        resp = requests.post(f"{API_URL}/signup", json={"email": email, "password": password, "name": name})
-        if resp.status_code == 200:
-            st.success("Signup successful!")
+        errors = []
+        if not is_valid_email(email):
+            errors.append("Invalid email format.")
+        if len(password) < 8:
+            errors.append("Password must be at least 8 characters.")
+        if (not re.search(r"[A-Z]", password) or
+            not re.search(r"[a-z]", password) or
+            not re.search(r"\d", password)):
+            errors.append("Password must contain uppercase, lowercase, and a digit.")
+        if len(name.strip()) < 2 or not re.match(r"^[a-zA-Z\s]+$", name):
+            errors.append("Name must be at least 2 characters, alphabets and spaces only.")
+
+        if errors:
+            for e in errors:
+                st.error(e)
         else:
-            st.error("Signup failed. Try again.")
+            resp = requests.post(f"{API_URL}/signup", json={"email": email, "password": password, "name": name})
+            if resp.status_code == 200:
+                st.success("Signup successful!")
+            elif resp.status_code == 422:
+                # Parse Pydantic validation error details
+                details = resp.json().get("detail", [])
+                for err in details:
+                    loc = " > ".join(str(x) for x in err.get("loc", []))
+                    msg = err.get("msg", "")
+                    st.error(f"Validation error in {loc}: {msg}")
+            else:
+                print("here")
+                st.error(f"Signup failed: {resp.text}")
+
 
 def fetch_apps(token):
     headers = {"Authorization": f"Bearer {token}"}
@@ -145,6 +176,16 @@ if "token" not in st.session_state:
 # --- Authenticated user interface ---
 st.sidebar.success(f"Welcome, {st.session_state.get('name', 'user').title()}")
 
+if st.sidebar.button("🚪 Logout"):
+    # Clear user session data
+    for key in ["token", "email", "name", "nav", "notif_dropdown_open", "editing_id", "editing_tab_status"]:
+        if key in st.session_state:
+            del st.session_state[key]
+    st.rerun()
+
+if "nav" not in st.session_state:
+    st.session_state["nav"] = "Dashboard"
+
 notifications = get_notifications()
 
 notif_count = len(notifications)
@@ -178,9 +219,6 @@ if st.session_state["notif_dropdown_open"]:
 
 # Navigation sidebar
 st.sidebar.header("Navigation")
-
-if "nav" not in st.session_state:
-    st.session_state["nav"] = "Dashboard"
 
 if st.session_state.get(FORCE_NAV_KEY):
     st.session_state["nav"] = "Dashboard"
@@ -523,8 +561,94 @@ elif option == "Metrics":
 
 elif option == "Settings":
     st.header("Settings")
-    st.info("Configure your preferences.")
-    # TODO: Add settings management
+    st.info("Edit your profile details below:")
+
+    with st.form("edit_user_form"):
+        new_name = st.text_input("New Name", value=st.session_state.get("name", ""))
+        new_email = st.text_input("New Email", value=st.session_state.get("email", ""))
+        new_password = st.text_input("New Password", type="password")  # Leave blank to keep old
+
+        submitted = st.form_submit_button("Save Changes")
+
+        errors = []
+        # Only validate if field is non-blank and different; blank fields mean 'no change'
+        if new_name and new_name != st.session_state.get("name", ""):
+            if len(new_name.strip()) < 2 or not re.match(r"^[a-zA-Z\s]+$", new_name):
+                errors.append("Name must be at least 2 characters, alphabets and spaces only.")
+
+        if new_email and new_email != st.session_state.get("email", ""):
+            if not is_valid_email(new_email):
+                errors.append("Invalid email format.")
+
+        if new_password:
+            if len(new_password) < 8:
+                errors.append("Password must be at least 8 characters.")
+            if (not re.search(r"[A-Z]", new_password) or
+                not re.search(r"[a-z]", new_password) or
+                not re.search(r"\d", new_password)):
+                errors.append("Password must contain uppercase, lowercase, and a digit.")
+
+        if submitted:
+            if errors:
+                for e in errors:
+                    st.error(e)
+            else:
+                # Only send non-blank, changed fields
+                payload = {}
+                if new_name and new_name != st.session_state.get("name", ""):
+                    payload["name"] = new_name
+                if new_email and new_email != st.session_state.get("email", ""):
+                    payload["email"] = new_email
+                if new_password:
+                    payload["password"] = new_password
+                if not payload:
+                    st.info("No changes detected.")
+                else:
+                    headers = {"Authorization": f"Bearer {st.session_state['token']}"}
+                    resp = requests.put(f"{API_URL}/me", json=payload, headers=headers)
+                    if resp.status_code == 200:
+                        respdata = resp.json()
+                        st.success("Details updated successfully!")
+                        st.session_state["name"] = respdata["name"]
+                        st.session_state["email"] = respdata["email"]
+                    elif resp.status_code == 422:
+                        details = resp.json().get("detail", [])
+                        for err in details:
+                            loc = " > ".join(str(x) for x in err.get("loc", []))
+                            msg = err.get("msg", "")
+                            st.error(f"Validation error in {loc}: {msg}")
+                    else:
+                        st.error(f"Update failed: {resp.text}")
+    
+    st.markdown("---")
+
+    if "show_delete_confirm" not in st.session_state:
+        st.session_state["show_delete_confirm"] = False
+
+    delete_clicked = st.button("🗑️ Delete Account")
+
+    if delete_clicked:
+        st.session_state["show_delete_confirm"] = True
+
+    if st.session_state["show_delete_confirm"]:
+        st.warning("Are you sure you want to delete your account? This action cannot be undone!")
+        confirm_delete = st.button("Delete", key="confirm_delete")
+        cancel_delete = st.button("Cancel", key="cancel_delete")
+        
+        if confirm_delete:
+            headers = {"Authorization": f"Bearer {st.session_state['token']}"}
+            resp = requests.delete(f"{API_URL}/me", headers=headers)
+            if resp.status_code == 200:
+                st.success("Account deleted. Goodbye!")
+                for key in ["token", "email", "name", "nav", "notif_dropdown_open", "editing_id", "editing_tab_status", "show_delete_confirm"]:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.rerun()
+            else:
+                st.error(f"Account deletion failed: {resp.text}")
+                st.session_state["show_delete_confirm"] = False
+        elif cancel_delete:
+            st.session_state["show_delete_confirm"] = False
 
 
 

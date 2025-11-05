@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from backend.db import engine, create_db_and_tables
 from backend.models import User, Application
 from passlib.context import CryptContext
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, constr, validator
 import jwt
 from typing import Optional
 from datetime import datetime, timedelta
@@ -12,6 +12,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 from backend.models import CronLog, AppNotification, Application, ApplicationTimeline
 import dateutil.parser
+import re
 
 
 logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
@@ -85,6 +86,54 @@ class SignupRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+class SignupRequest(BaseModel):
+    email: EmailStr
+    password: constr(min_length=8)  # Minimum 8 chars
+    name: constr(min_length=2, max_length=50)
+
+    @validator("password")
+    def password_complexity(cls, v):
+        if (not re.search(r"[A-Z]", v) or 
+            not re.search(r"[a-z]", v) or 
+            not re.search(r"\d", v)):
+            raise ValueError(
+                "Password must contain at least one uppercase letter, one lowercase letter, and one digit"
+            )
+        return v
+
+    @validator("name")
+    def name_valid_chars(cls, v):
+        if not re.match(r"^[a-zA-Z\s]+$", v):
+            raise ValueError("Name can only contain alphabetic characters and spaces")
+        return v.strip()
+    
+class UpdateUserRequest(BaseModel):
+    email: EmailStr = None
+    password: constr(min_length=8) = None
+    name: constr(min_length=2, max_length=50) = None
+
+    @validator("password")
+    def password_complexity(cls, v):
+        if v is None:
+            return v
+        import re
+        if (not re.search(r"[A-Z]", v) or
+            not re.search(r"[a-z]", v) or
+            not re.search(r"\d", v)):
+            raise ValueError(
+                "Password must contain at least one uppercase letter, one lowercase letter, and one digit"
+            )
+        return v
+
+    @validator("name")
+    def name_valid_chars(cls, v):
+        if v is None:
+            return v
+        import re
+        if not re.match(r"^[a-zA-Z\s]+$", v):
+            raise ValueError("Name can only contain alphabetic characters and spaces")
+        return v.strip()
 
 app = FastAPI()
 
@@ -249,7 +298,33 @@ def debug_apps():
                 "followed_up_at": str(a.followed_up_at) if hasattr(a, "followed_up_at") else None
             })
         return result
+    
+@app.put("/me")
+def update_me(request: UpdateUserRequest, current_user: dict = Depends(get_current_user)):
+    with Session(engine) as session:
+        user = session.get(User, current_user["id"])
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if request.email:
+            user.email = request.email
+        if request.name:
+            user.name = request.name
+        if request.password:
+            user.password_hash = pwd_context.hash(request.password[:72])
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return {"id": user.id, "email": user.email, "name": user.name}
 
+@app.delete("/me")
+def delete_me(current_user: dict = Depends(get_current_user)):
+    with Session(engine) as session:
+        user = session.get(User, current_user["id"])
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        session.delete(user)
+        session.commit()
+        return {"detail": "Account deleted"}
 
 def run_cron_updates(for_user_id=None, engine=None):
 
