@@ -107,6 +107,11 @@ class CreateAppRequest(BaseModel):
     followup_method: Optional[str] = None
     notes: Optional[str] = None
 
+class SignupRequest(BaseModel):
+    email: str
+    password: str
+    name: str
+    
 class UpdateAppRequest(BaseModel):
     company_name: Optional[str] = None
     role_title: Optional[str] = None
