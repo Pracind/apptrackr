@@ -1,22 +1,51 @@
+"""
+This file is a FastAPI backend for tracking job applications. It provides:
+- User signup / login via JWT tokens
+- CRUD for "applications" (job applications)
+- A simple automation (cron) that updates application statuses and creates notifications
+- Endpoints for metrics, notifications, and debugging
+"""
+
+# Standard library imports
+import dateutil.parser
+import os
+
+import re
+import jwt
+import logging
+
+#Creating env files for security 
+from dotenv import load_dotenv
+
+# FastAPI and auth
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
+
+# Database and project modules
 from sqlmodel import Session, select
 from backend.db import engine, create_db_and_tables
 from backend.models import User, Application
+
+#Password Hashing
 from passlib.context import CryptContext
+
+#Pydantic Models
 from pydantic import BaseModel, EmailStr, constr, validator
-import jwt
+
 from typing import Optional
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
-import logging
+
+
 from backend.models import CronLog, AppNotification, Application, ApplicationTimeline
-import dateutil.parser
-import re
 
 
+load_dotenv()
+
+
+# --- Logging setup ---
+#Supressing noisy logs 
 logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
-
 logging.getLogger("uvicorn").setLevel(logging.WARNING)
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
@@ -24,18 +53,31 @@ logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# --- Auth and crypto config ---
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
-SECRET_KEY = "superdupersecret"
-ALGORITHM = "HS256"
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY not set. Please define it in your environment or .env file.")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Call this once at startup
+#Creating Tables for DB
 create_db_and_tables()
 
 
+
+
 def get_current_user(token: str = Depends(oauth2_scheme)):
+    """
+    Dependency used by endpoints to turn an OAuth2 bearer token into a current_user dict.
+
+
+    Notes:
+    - Decodes JWT and expects 'sub' and 'email' claims
+    - If token invalid, raises 401
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -47,12 +89,12 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         email = payload.get("email")
         if user_id is None or email is None:
             raise credentials_exception
-        # Optionally query the DB for real user object here!
         return {"id": user_id, "email": email, "name": payload.get("name")}
     except jwt.PyJWTError:
         raise credentials_exception
     
-
+# --- Pydantic request models ---
+# These define and validate payloads coming into API endpoints
 class CreateAppRequest(BaseModel):
     company_name: str
     role_title: str
@@ -77,11 +119,6 @@ class UpdateAppRequest(BaseModel):
     followup_method: Optional[str] = None
     notes: Optional[str] = None
     followed_up_at: Optional[datetime] = None
-
-class SignupRequest(BaseModel):
-    email: str
-    password: str
-    name: str
 
 class LoginRequest(BaseModel):
     email: str
@@ -135,10 +172,20 @@ class UpdateUserRequest(BaseModel):
             raise ValueError("Name can only contain alphabetic characters and spaces")
         return v.strip()
 
+
+# --- FastAPI app and endpoints ---
 app = FastAPI()
 
 @app.post("/signup")
 def signup(user: SignupRequest):
+    """
+    Create a new user. Password is hashed. Email uniqueness is checked.
+
+
+    Notes/risks:
+    - Password is truncated to 72 bytes before hashing (bcrypt limit) — communicated in code but be explicit in docs.
+    - No email verification.
+    """
     # Hash the password
     hashed_password = pwd_context.hash(user.password[:72])
     # Check if email already exists
@@ -161,6 +208,9 @@ def signup(user: SignupRequest):
     
 @app.post("/login")
 def login(request: LoginRequest):
+    """
+    Authenticate user and return JWT token valid for 1 hour.
+    """
     with Session(engine) as session:
         user = session.exec(
             select(User).where(User.email == request.email)
@@ -326,6 +376,7 @@ def delete_me(current_user: dict = Depends(get_current_user)):
         session.commit()
         return {"detail": "Account deleted"}
 
+# --- Automation / Cron logic ---
 def run_cron_updates(for_user_id=None, engine=None):
 
     logger.info("APScheduler: Running automatic followup check…")
@@ -347,7 +398,6 @@ def run_cron_updates(for_user_id=None, engine=None):
 
         # Move Active -> Pending
         active_apps = session.exec(select(Application).where(Application.status == "active")).all()
-        #print("[DEBUG] active_apps list:", active_apps)
 
         for app in active_apps:
             if app.followup_date and app.followup_date.date() <= today:
@@ -384,12 +434,8 @@ def run_cron_updates(for_user_id=None, engine=None):
                     except Exception as e:
                         logger.warning(f"App {app.id} has bad followed_up_at string: {app.followed_up_at}, skipping.")
                         continue
-            
-            print(datetime.utcnow())
-            print(fup + timedelta(seconds = 7))
-            print(datetime.utcnow() <= (fup + timedelta(seconds=7)))
 
-            if datetime.utcnow() <= (fup + timedelta(seconds=7)):
+            if datetime.utcnow() <= (fup + timedelta(days=7)):
                 logger.info(f"Updating App {app.id} to not-responded")
                 app.status = "not-responded"
                 updated_count += 1 

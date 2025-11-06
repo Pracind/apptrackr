@@ -1,3 +1,14 @@
+"""
+AppTrackr Streamlit frontend
+
+- Connects to a FastAPI backend at API_URL (default http://127.0.0.1:8000).
+- Features: signup/login, list/edit/delete job applications, metrics and timeline viewer.
+- Notes:
+  * This is a development setup — set API_URL via environment or config for production.
+  * Tokens are stored in st.session_state['token'] and used in Authorization headers.
+  * Date/time strings are expected in ISO format from the backend.
+"""
+
 import streamlit as st
 import requests
 import pandas as pd
@@ -22,6 +33,13 @@ def is_valid_email(email):
 
 
 def show_login():
+    # --- App Header ---
+    st.title("AppTrackr")
+    st.caption("**Python-powered job application tracker**")
+    st.write("Track, manage, and visualize your job search with ease.")
+    st.markdown("---")
+
+    # --- Login Form ---
     st.subheader("Login")
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
@@ -191,7 +209,6 @@ notifications = get_notifications()
 notif_count = len(notifications)
 bell_icon = "🔔"
 badge = f" {notif_count}" if notif_count > 0 else ""
-#notification_open = st.button(f"{bell_icon}{badge}", key="notif_bell")
 
 if "notif_dropdown_open" not in st.session_state:
     st.session_state["notif_dropdown_open"] = False
@@ -302,6 +319,7 @@ if option == "Dashboard":
                     row_cols = st.columns(len(display_cols) + 1)
                     for j, col in enumerate(display_cols):
                         row_cols[j].write(row[col], unsafe_allow_html=True)
+
                     # True Streamlit button, not HTML
                     if row_cols[-1].button("Edit", key=f"editbtn_{row['id']}_{idx}"):
                         st.session_state['editing_id'] = row['id']
@@ -395,7 +413,7 @@ if option == "Dashboard":
                 st.rerun()
 
         else:
-            # Always reset it if not currently editing
+            #Reset it if not currently editing
             st.session_state['confirm_delete'] = False
 
 
@@ -418,7 +436,7 @@ elif option == "Add Application":
         submitted = st.form_submit_button("Add Application")
 
         if submitted:
-            # Simple required field validation (all except notes)
+            # Simple required field validation (except notes)
             missing_fields = []
             if not company_name:
                 missing_fields.append("Company")
@@ -493,9 +511,8 @@ elif option == "Metrics":
     st.markdown("---")
     st.header("📜 Application Timeline Viewer")
 
-    apps = fetch_apps(st.session_state.token)  # Reuse your fetch_apps to get all user's applications
+    apps = fetch_apps(st.session_state.token)  
     if apps:
-        # Nice selector labels -- company + role, fallback to ID if missing name
         app_options = [
             {"id": app["id"], "label": f"{app['company_name']} – {app['role_title']}"}
             for app in apps
@@ -512,7 +529,7 @@ elif option == "Metrics":
         timeline = fetch_app_timeline(selected_app_id, st.session_state.token)
         st.subheader(f"Timeline for {app_labels[selected_idx]}")
 
-        # Always show creation date first!
+        # Always show creation date first
         if app_info and "applied_date" in app_info:
             applied_str = pd.to_datetime(app_info["applied_date"]).strftime("%Y-%m-%d %H:%M UTC")
             st.markdown(f"- 📄 **Application created on:** {applied_str}")
